@@ -1,0 +1,15 @@
+# Virtual environments
+.venv/
+.venv311/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Dataset and generated files
+Datasets/
+models/
+reports/
