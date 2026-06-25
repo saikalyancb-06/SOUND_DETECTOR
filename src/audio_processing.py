@@ -12,26 +12,30 @@ def extract_acoustic_parameters(audio_path):
     # Load with native sampling configurations; limit duration to 10s for CPU efficiency
     y, sr = librosa.load(audio_path, sr=None, duration=10.0)
     
+    # Strip silent regions (Voice Activity Detection)
+    intervals = librosa.effects.split(y, top_db=25)
+    y_active = np.concatenate([y[start:end] for start, end in intervals]) if len(intervals) > 0 else y
+    
     # 1-2. Fundamental Frequency Tracking (F0/Pitch Analytics)
     f0, voiced_flag, voiced_probs = librosa.pyin(
-        y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7')
+        y_active, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7')
     )
     f0_cleaned = f0[~np.isnan(f0)]
     mean_f0 = np.mean(f0_cleaned) if len(f0_cleaned) > 0 else 0.0
     std_f0 = np.std(f0_cleaned) if len(f0_cleaned) > 0 else 0.0
     pitch_range = (np.max(f0_cleaned) - np.min(f0_cleaned)) if len(f0_cleaned) > 0 else 0.0
     voiced_ratio = float(np.mean(~np.isnan(f0))) if len(f0) > 0 else 0.0
-
+ 
     # 3-5. Spectral Domain Footprints
-    spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-    spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
-    zero_crossing_rate = librosa.feature.zero_crossing_rate(y)[0]
+    spectral_centroids = librosa.feature.spectral_centroid(y=y_active, sr=sr)[0]
+    spectral_rolloff = librosa.feature.spectral_rolloff(y=y_active, sr=sr)[0]
+    zero_crossing_rate = librosa.feature.zero_crossing_rate(y_active)[0]
     
     # 6. Signal Energy Dynamics (RMS Proxy)
-    rms = librosa.feature.rms(y=y)[0]
+    rms = librosa.feature.rms(y=y_active)[0]
     
     # 7-19. Mel-Frequency Cepstral Coefficients (MFCCs 1-13)
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+    mfccs = librosa.feature.mfcc(y=y_active, sr=sr, n_mfcc=13)
     mean_mfccs = np.mean(mfccs, axis=1)
 
     # Compile explicit baseline payload mapping dictionary

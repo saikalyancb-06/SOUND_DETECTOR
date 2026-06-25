@@ -3,6 +3,8 @@
 # ==========================================
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
@@ -11,12 +13,23 @@ import joblib
 
 class EnsembleSpeechClassifier:
     def __init__(self):
-        # Task A Classifier: Random Forest Profile Engine
-        self.age_model = RandomForestClassifier(n_estimators=100, random_state=42)
-        # Task B Classifier: High Performance Gradient Booster
-        self.gender_model = XGBClassifier(n_estimators=100, random_state=42)
-        # Task C Classifier: Structural Speech Anomaly Evaluator
-        self.diagnostic_model = RandomForestClassifier(n_estimators=150, max_depth=10, random_state=42)
+        # Task A Classifier: Random Forest Profile Engine with Scaling and depth regularization
+        self.age_model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', RandomForestClassifier(n_estimators=100, max_depth=6, min_samples_split=4, random_state=42))
+        ])
+        
+        # Task B Classifier: High Performance Gradient Booster with Scaling and shrinkage regularization
+        self.gender_model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', XGBClassifier(n_estimators=100, max_depth=3, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, random_state=42))
+        ])
+        
+        # Task C Classifier: Structural Speech Anomaly Evaluator with Scaling and depth regularization
+        self.diagnostic_model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('clf', RandomForestClassifier(n_estimators=150, max_depth=6, min_samples_split=4, random_state=42))
+        ])
 
     def train_pipelines(self, X_train, y_age, y_gender, y_diag):
         """Trains models simultaneously using computed matrix vectors."""

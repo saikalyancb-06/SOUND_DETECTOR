@@ -49,6 +49,16 @@ def execute_diagnostic_engine(audio_file_path, hf_token=None, model_dir="models"
         "Anonymized_Timeline_Output": timeline_manifest
     }
     
+    print("\n=======================================================")
+    print("            DIAGNOSTIC REPORT SUMMARY                  ")
+    print("=======================================================")
+    print(f" Target Audio:     {audio_file_path}")
+    print(f" Age Group:        {classification_results.get('Age_Classification')}")
+    print(f" Gender:           {classification_results.get('Gender_Classification')}")
+    print(f" Clinical Profile: {classification_results.get('Acoustic_Profile')}")
+    print(f" Prediction Mode:  {classification_results.get('Prediction_Mode')}")
+    print("=======================================================")
+
     print("\n[+] DIAGNOSTIC MODEL LOG COMPLETE:")
     print(json.dumps(final_payload, indent=4, ensure_ascii=False))
     return final_payload
