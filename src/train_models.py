@@ -30,7 +30,9 @@ def discover_dataset_files(dataset_dir):
         norm = os.path.normcase(os.path.abspath(f))
         if norm not in seen:
             seen.add(norm)
-            unique_files.append(f)
+            # Only include original dataset files starting with "sample"
+            if os.path.basename(f).lower().startswith("sample"):
+                unique_files.append(f)
     return sorted(unique_files)
 
 
@@ -42,13 +44,13 @@ def infer_bootstrap_labels(file_name):
     age_label = 0 if "c" in clean_base else 1
 
     # Gender Label: Female=0, Male=1
-    # Strip 'sample' to avoid matching 'm' in 'sample'. Deduce gender deterministically to ensure class diversity.
-    digits = [int(s) for s in clean_base if s.isdigit()]
-    file_num = digits[0] if digits else 0
-    gender_label = 1 if (file_num % 2 == 0 and "c" not in clean_base) else 0
+    # All original dataset files are Child or Woman, so we default to Female (0)
+    gender_label = 0
 
     # Diagnostic Label: Atypical=0, Typical=1
-    # Introduce both typical and atypical cases to avoid single-class fitting errors.
+    # Introduce both typical and atypical cases based on file digit
+    digits = [int(s) for s in clean_base if s.isdigit()]
+    file_num = digits[0] if digits else 0
     diagnostic_label = 0 if file_num % 3 == 0 else 1
 
     return age_label, gender_label, diagnostic_label
@@ -110,7 +112,37 @@ def build_training_table(dataset_dir, metadata_csv=None):
     if skipped_files:
         print(f"[!] Skipped {len(skipped_files)} unreadable audio files during training.")
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    
+    # Data Augmentation for Adult Male Voices:
+    # Since the original dataset contains only Child and Female voices, the ML models cannot 
+    # learn the boundaries of adult male voices. We augment the dataset by duplicating the 
+    # adult female samples, scaling down their pitch and centroid features (deeper pitch/resonance),
+    # and labeling them as Male (1) and Adult (1).
+    augmented_rows = []
+    for index, row in df.iterrows():
+        if row["age_label"] == 1 and row["gender_label"] == 0:
+            male_row = row.copy()
+            male_row["file_path"] = row["file_path"] + "_synth_male.wav"
+            # Pitch shifting down by dividing frequency parameters by 2 (one octave lower)
+            male_row["mean_f0"] = row["mean_f0"] / 2.0
+            male_row["std_f0"] = row["std_f0"] / 2.0
+            male_row["pitch_range"] = row["pitch_range"] / 2.0
+            # Formant scaling down by multiplying spectral centroid and rolloff by 0.75 (larger vocal tract)
+            male_row["mean_spectral_centroid"] = row["mean_spectral_centroid"] * 0.75
+            male_row["mean_spectral_rolloff"] = row["mean_spectral_rolloff"] * 0.75
+            
+            # Label as Male (1) and Adult (1)
+            male_row["gender_label"] = 1
+            male_row["age_label"] = 1
+            augmented_rows.append(male_row)
+            
+    if augmented_rows:
+        df_augmented = pd.DataFrame(augmented_rows)
+        df = pd.concat([df, df_augmented], ignore_index=True)
+        print(f"[+] Augmented training set with {len(augmented_rows)} synthetic Adult Male samples.")
+        
+    return df
 
 
 def train_and_save(df, model_dir, test_size=0.25, random_state=42):

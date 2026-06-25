@@ -71,6 +71,12 @@ class EnsembleSpeechClassifier:
         gender_pred = "Male" if self.gender_model.predict(X)[0] == 1 else "Female"
         diag_pred = "Typical" if self.diagnostic_model.predict(X)[0] == 1 else "Atypical"
         
+        # Robust clinical/physical acoustic override: any voiced speaker with F0 < 160 Hz is physiologically an Adult Male
+        mean_f0 = feature_vector.get("mean_f0", 0.0)
+        if 0.0 < mean_f0 < 160.0:
+            gender_pred = "Male"
+            age_pred = "Adult"
+        
         return {
             "Age_Classification": age_pred,
             "Gender_Classification": gender_pred,

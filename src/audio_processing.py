@@ -9,8 +9,8 @@ def extract_acoustic_parameters(audio_path):
     Computes exactly 21 explicit linguistic and acoustic features across
     tonal, spectral, and dynamic properties.
     """
-    # Load with native sampling configurations; limit duration to 60s for CPU efficiency
-    y, sr = librosa.load(audio_path, sr=None, duration=60.0)
+    # Load with native sampling configurations; limit duration to 10s for CPU efficiency
+    y, sr = librosa.load(audio_path, sr=None, duration=10.0)
     
     # 1-2. Fundamental Frequency Tracking (F0/Pitch Analytics)
     f0, voiced_flag, voiced_probs = librosa.pyin(
