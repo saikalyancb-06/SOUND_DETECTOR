@@ -4,24 +4,45 @@
 import whisper
 import torch
 import librosa
+import re
 
 try:
     from pyannote.audio import Pipeline
 except Exception:
     Pipeline = None
 
-_cached_whisper = None
+_cached_whisper_tiny = None
+_cached_whisper_small = None
 _cached_diarization = None
 _diarization_loaded = False
 
+def devanagari_to_kannada(text):
+    converted = []
+    for char in text:
+        cp = ord(char)
+        if 0x0900 <= cp <= 0x097F:
+            converted.append(chr(cp + 0x0380))
+        else:
+            converted.append(char)
+    return "".join(converted)
+
+def sanitize_script(text):
+    # Retain only Kannada characters (\u0C80-\u0CFF), Latin characters (a-zA-Z), digits, spaces, and standard formatting punctuation.
+    cleaned = re.sub(r'[^\u0C80-\u0CFFa-zA-Z0-9\s\.,!\?\-\'\"\(\)/\[\]]', '', text)
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
 class SpeechProcessor:
     def __init__(self, auth_token=None):
-        global _cached_whisper, _cached_diarization, _diarization_loaded
+        global _cached_whisper_tiny, _cached_whisper_small, _cached_diarization, _diarization_loaded
         
-        # Load and cache Whisper model
-        if _cached_whisper is None:
-            _cached_whisper = whisper.load_model("tiny")
-        self.whisper_model = _cached_whisper
+        # Load and cache both Whisper models
+        if _cached_whisper_tiny is None:
+            _cached_whisper_tiny = whisper.load_model("tiny")
+        self.whisper_tiny = _cached_whisper_tiny
+
+        if _cached_whisper_small is None:
+            _cached_whisper_small = whisper.load_model("small")
+        self.whisper_small = _cached_whisper_small
         
         # Load and cache Diarization pipeline
         if not _diarization_loaded:
@@ -47,18 +68,23 @@ class SpeechProcessor:
 
         # Fallback path when diarization backend is unavailable.
         if self.diarization_pipeline is None:
-            options = dict(language="kn", beam_size=1, no_speech_threshold=0.6, logprob_threshold=-1.0)
-            result = self.whisper_model.transcribe(
-                waveform,
-                fp16=torch.cuda.is_available(),
-                **options
-            )
+            options = dict(language="kn", beam_size=5, no_speech_threshold=0.6, logprob_threshold=-1.0)
+            
+            # Pass 1: Tiny model for English/Latin transliteration
+            res_tiny = self.whisper_tiny.transcribe(waveform, fp16=torch.cuda.is_available(), **options)
+            latin_text = res_tiny["text"].strip()
+            
+            # Pass 2: Small model for Devanagari mapped to Kannada script
+            res_small = self.whisper_small.transcribe(waveform, fp16=torch.cuda.is_available(), **options)
+            kannada_text = devanagari_to_kannada(res_small["text"].strip())
+            
+            combined_text = f"[ಕನ್ನಡ] {kannada_text} / [English] {latin_text}"
             duration = len(waveform) / float(sample_rate)
             return [{
                 "speaker": "Speaker_1",
                 "start": 0.0,
                 "end": round(duration, 2),
-                "text": result["text"].strip()
+                "text": sanitize_script(combined_text)
             }]
             
         diarization = self.diarization_pipeline(audio_path)
@@ -75,18 +101,23 @@ class SpeechProcessor:
                 continue
             
             # Target segment transcription bounded strictly by diarization timestamps
-            options = dict(language="kn", beam_size=1, no_speech_threshold=0.6, logprob_threshold=-1.0)
-            result = self.whisper_model.transcribe(
-                segment_audio,
-                fp16=torch.cuda.is_available(),
-                **options
-            )
+            options = dict(language="kn", beam_size=5, no_speech_threshold=0.6, logprob_threshold=-1.0)
+            
+            # Pass 1: Tiny model for English/Latin
+            res_tiny = self.whisper_tiny.transcribe(segment_audio, fp16=torch.cuda.is_available(), **options)
+            latin_text = res_tiny["text"].strip()
+            
+            # Pass 2: Small model for Devanagari mapped to Kannada
+            res_small = self.whisper_small.transcribe(segment_audio, fp16=torch.cuda.is_available(), **options)
+            kannada_text = devanagari_to_kannada(res_small["text"].strip())
+            
+            combined_text = f"[ಕನ್ನಡ] {kannada_text} / [English] {latin_text}"
             
             transcription_timeline.append({
                 "speaker": anonymized_label,
                 "start": round(segment.start, 2),
                 "end": round(segment.end, 2),
-                "text": result["text"].strip()
+                "text": sanitize_script(combined_text)
             })
             
         return transcription_timeline

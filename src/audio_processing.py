@@ -3,6 +3,19 @@
 # ==========================================
 import librosa
 import numpy as np
+from scipy.signal import butter, lfilter
+
+def butter_bandpass(lowcut, highcut, fs, order=4):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = lfilter(b, a, data)
+    return y
 
 def extract_acoustic_parameters(audio_path):
     """
@@ -12,9 +25,12 @@ def extract_acoustic_parameters(audio_path):
     # Load with native sampling configurations; limit duration to 10s for CPU efficiency
     y, sr = librosa.load(audio_path, sr=None, duration=10.0)
     
+    # 4th-order Butterworth Bandpass Filter (50Hz - 4000Hz) to eliminate non-speech hums & hiss
+    y_filtered = butter_bandpass_filter(y, 50.0, min(4000.0, (sr / 2.0) - 100.0), sr, order=4)
+    
     # Strip silent regions (Voice Activity Detection)
-    intervals = librosa.effects.split(y, top_db=25)
-    y_active = np.concatenate([y[start:end] for start, end in intervals]) if len(intervals) > 0 else y
+    intervals = librosa.effects.split(y_filtered, top_db=25)
+    y_active = np.concatenate([y_filtered[start:end] for start, end in intervals]) if len(intervals) > 0 else y_filtered
     
     # 1-2. Fundamental Frequency Tracking (F0/Pitch Analytics)
     f0, voiced_flag, voiced_probs = librosa.pyin(
