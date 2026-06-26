@@ -13,7 +13,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-from main import execute_diagnostic_engine
+
 
 
 def discover_audio_files(dataset_dir):
@@ -32,19 +32,36 @@ def discover_audio_files(dataset_dir):
 
 
 def run_batch(dataset_dir, out_json, out_csv, hf_token=None, model_dir="models"):
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        from main import execute_diagnostic_engine
+    except ModuleNotFoundError:
+        from src.main import execute_diagnostic_engine
+
     audio_files = discover_audio_files(dataset_dir)
     results = []
 
     for audio_path in audio_files:
         try:
             payload = execute_diagnostic_engine(audio_path, hf_token=hf_token, model_dir=model_dir)
-            cls = payload.get("Classification_Metadata", {})
+            speaker_diags = payload.get("Speaker_Diagnostics", {})
+            
+            # Aggregate speaker metrics for batch summary
+            ages = []
+            genders = []
+            diags = []
+            
+            for sp_id, val in sorted(speaker_diags.items()):
+                ages.append(f"{sp_id}:{val.get('Age', 'Unknown')}")
+                genders.append(f"{sp_id}:{val.get('Gender', 'Unknown')}")
+                diags.append(f"{sp_id}:{val.get('Clinical_Profile', 'Unknown')}")
+                
             results.append({
                 "file_path": audio_path,
-                "age": cls.get("Age_Classification", "Unknown"),
-                "gender": cls.get("Gender_Classification", "Unknown"),
-                "diagnostic": cls.get("Acoustic_Profile", "Unknown"),
-                "prediction_mode": cls.get("Prediction_Mode", "Unknown"),
+                "age": "; ".join(ages),
+                "gender": "; ".join(genders),
+                "diagnostic": "; ".join(diags),
+                "prediction_mode": "trained_ensemble",
                 "num_segments": len(payload.get("Anonymized_Timeline_Output", [])),
                 "status": "ok",
             })

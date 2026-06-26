@@ -2,72 +2,16 @@
 # FILE: src/audio_processing.py
 # ==========================================
 import librosa
-import numpy as np
-from scipy.signal import butter, lfilter
-
-def butter_bandpass(lowcut, highcut, fs, order=4):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, data)
-    return y
+try:
+    from src.audio.feature_extractor import extract_features
+except ModuleNotFoundError:
+    from audio.feature_extractor import extract_features
 
 def extract_acoustic_parameters(audio_path):
     """
-    Computes exactly 21 explicit linguistic and acoustic features across
-    tonal, spectral, and dynamic properties.
+    Legacy wrapper function to preserve compatibility.
+    Loads audio and extracts acoustic parameters.
     """
-    # Load with native sampling configurations; limit duration to 10s for CPU efficiency
-    y, sr = librosa.load(audio_path, sr=None, duration=10.0)
-    
-    # 4th-order Butterworth Bandpass Filter (50Hz - 4000Hz) to eliminate non-speech hums & hiss
-    y_filtered = butter_bandpass_filter(y, 50.0, min(4000.0, (sr / 2.0) - 100.0), sr, order=4)
-    
-    # Strip silent regions (Voice Activity Detection)
-    intervals = librosa.effects.split(y_filtered, top_db=25)
-    y_active = np.concatenate([y_filtered[start:end] for start, end in intervals]) if len(intervals) > 0 else y_filtered
-    
-    # 1-2. Fundamental Frequency Tracking (F0/Pitch Analytics)
-    f0, voiced_flag, voiced_probs = librosa.pyin(
-        y_active, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7')
-    )
-    f0_cleaned = f0[~np.isnan(f0)]
-    mean_f0 = np.mean(f0_cleaned) if len(f0_cleaned) > 0 else 0.0
-    std_f0 = np.std(f0_cleaned) if len(f0_cleaned) > 0 else 0.0
-    pitch_range = (np.max(f0_cleaned) - np.min(f0_cleaned)) if len(f0_cleaned) > 0 else 0.0
-    voiced_ratio = float(np.mean(~np.isnan(f0))) if len(f0) > 0 else 0.0
- 
-    # 3-5. Spectral Domain Footprints
-    spectral_centroids = librosa.feature.spectral_centroid(y=y_active, sr=sr)[0]
-    spectral_rolloff = librosa.feature.spectral_rolloff(y=y_active, sr=sr)[0]
-    zero_crossing_rate = librosa.feature.zero_crossing_rate(y_active)[0]
-    
-    # 6. Signal Energy Dynamics (RMS Proxy)
-    rms = librosa.feature.rms(y=y_active)[0]
-    
-    # 7-19. Mel-Frequency Cepstral Coefficients (MFCCs 1-13)
-    mfccs = librosa.feature.mfcc(y=y_active, sr=sr, n_mfcc=13)
-    mean_mfccs = np.mean(mfccs, axis=1)
-
-    # Compile explicit baseline payload mapping dictionary
-    feature_vector = {
-        "mean_f0": float(mean_f0),
-        "std_f0": float(std_f0),
-        "pitch_range": float(pitch_range),
-        "voiced_ratio": float(voiced_ratio),
-        "mean_spectral_centroid": float(np.mean(spectral_centroids)),
-        "mean_spectral_rolloff": float(np.mean(spectral_rolloff)),
-        "mean_zcr": float(np.mean(zero_crossing_rate)),
-        "rms_energy": float(np.mean(rms)),
-    }
-    
-    # Map raw structural MFCC elements cleanly into vector
-    for i, mfcc_val in enumerate(mean_mfccs, 1):
-        feature_vector[f"mfcc_{i}"] = float(mfcc_val)
-        
-    return feature_vector  # Matrix containing precisely 21 scalar features
+    y, sr = librosa.load(audio_path, sr=16000)
+    # Return features dict
+    return extract_features(y, sr)

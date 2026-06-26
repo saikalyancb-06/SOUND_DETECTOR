@@ -1,0 +1,11 @@
+# config.yaml
+ASR_MODEL: "large-v3" # options: "tiny", "base", "small", "medium", "large-v3"
+DIARIZATION_MODEL: "ecapa-tdnn"
+CLASSIFIER: "Voting"
+DEVICE: "auto" # options: "auto", "cuda", "cpu"
+LANGUAGE: "auto"
+NOISE_REDUCTION: "spectral_subtraction" # RNNoise/DeepFilterNet if available, spectral_subtraction as baseline fallback
+VAD_THRESHOLD: 0.5
+MIN_TURN_DURATION: 0.3
+MERGE_TURN_GAP: 0.3
+PITCH_MALE_THRESHOLD: 165.0

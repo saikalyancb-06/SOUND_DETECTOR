@@ -1,15 +1,40 @@
 # Virtual environments
 .venv/
 .venv311/
+venv/
+ENV/
 
-# Python cache
+# Python cache and distribution
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
 
-# VS Code
+# VS Code and PyCharm IDEs
 .vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
 
 # Dataset and generated files
 Datasets/
 models/
 reports/
+*.wav
+*.mp3
+*.m4a
+*.zip
+*.rar
+*.tar.gz
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
